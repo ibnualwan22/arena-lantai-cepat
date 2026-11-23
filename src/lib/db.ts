@@ -2,7 +2,7 @@ import { neon } from "@neondatabase/serverless";
 import fs from "fs";
 import path from "path";
 import { DEFAULT_SETTINGS, SEED_CHAPTERS } from "./seed-data";
-import type { Chapter, DifficultyPreset, GameSettings, QuestionMode, Vocabulary } from "./types";
+import type { Chapter, DifficultyPreset, GameSettings, PlayerStat, QuestionMode, Vocabulary } from "./types";
 
 const LOCAL_DB_PATH = path.join(process.cwd(), "data", "local-db.json");
 
@@ -12,6 +12,7 @@ interface LocalStore {
   chapters: Chapter[];
   vocabularies: Vocabulary[];
   settings: GameSettings;
+  playerStats?: PlayerStat[];
 }
 
 export function isNeonConfigured(): boolean {
@@ -132,6 +133,20 @@ async function ensureNeonInitialized(): Promise<void> {
           intermission_seconds INT DEFAULT 8,
           question_mode VARCHAR(32) DEFAULT 'auto',
           show_latin_hint BOOLEAN DEFAULT TRUE,
+          updated_at TIMESTAMPTZ DEFAULT NOW()
+        )
+      `;
+      await sql`
+        CREATE TABLE IF NOT EXISTS player_stats (
+          roblox_user_id BIGINT PRIMARY KEY,
+          username VARCHAR(64) NOT NULL,
+          display_name VARCHAR(80) NOT NULL,
+          rank_points INT DEFAULT 0,
+          rank_title VARCHAR(48) DEFAULT 'Mubtadi''',
+          dinar INT DEFAULT 0,
+          total_correct INT DEFAULT 0,
+          best_streak INT DEFAULT 0,
+          wins INT DEFAULT 0,
           updated_at TIMESTAMPTZ DEFAULT NOW()
         )
       `;
@@ -617,4 +632,99 @@ export async function updateGameSettings(patch: Partial<GameSettings>): Promise<
     WHERE id = 1
   `;
   return next;
+}
+
+// ==================== COMPETITIVE PLAYER STATS & LEADERBOARD ====================
+export async function upsertPlayerStat(stat: Omit<PlayerStat, "updated_at">): Promise<PlayerStat> {
+  const now = new Date().toISOString();
+  if (!isNeonConfigured()) {
+    const store = readLocalStore();
+    if (!store.playerStats) store.playerStats = [];
+    const idx = store.playerStats.findIndex((p) => p.roblox_user_id === stat.roblox_user_id);
+    const merged: PlayerStat = {
+      roblox_user_id: stat.roblox_user_id,
+      username: stat.username,
+      display_name: stat.display_name,
+      rank_points: idx >= 0 ? Math.max(store.playerStats[idx].rank_points, stat.rank_points) : stat.rank_points,
+      rank_title: stat.rank_title,
+      dinar: stat.dinar,
+      total_correct: idx >= 0 ? Math.max(store.playerStats[idx].total_correct, stat.total_correct) : stat.total_correct,
+      best_streak: idx >= 0 ? Math.max(store.playerStats[idx].best_streak, stat.best_streak) : stat.best_streak,
+      wins: idx >= 0 ? Math.max(store.playerStats[idx].wins, stat.wins) : stat.wins,
+      updated_at: now,
+    };
+    if (idx >= 0) store.playerStats[idx] = merged;
+    else store.playerStats.push(merged);
+    writeLocalStore(store);
+    return merged;
+  }
+
+  await ensureNeonInitialized();
+  const sql = getSql();
+  const rows = await sql`
+    INSERT INTO player_stats (
+      roblox_user_id, username, display_name, rank_points, rank_title,
+      dinar, total_correct, best_streak, wins, updated_at
+    )
+    VALUES (
+      ${stat.roblox_user_id}, ${stat.username}, ${stat.display_name},
+      ${stat.rank_points}, ${stat.rank_title}, ${stat.dinar},
+      ${stat.total_correct}, ${stat.best_streak}, ${stat.wins}, NOW()
+    )
+    ON CONFLICT (roblox_user_id) DO UPDATE SET
+      username = EXCLUDED.username,
+      display_name = EXCLUDED.display_name,
+      rank_points = GREATEST(player_stats.rank_points, EXCLUDED.rank_points),
+      rank_title = EXCLUDED.rank_title,
+      dinar = EXCLUDED.dinar,
+      total_correct = GREATEST(player_stats.total_correct, EXCLUDED.total_correct),
+      best_streak = GREATEST(player_stats.best_streak, EXCLUDED.best_streak),
+      wins = GREATEST(player_stats.wins, EXCLUDED.wins),
+      updated_at = NOW()
+    RETURNING roblox_user_id, username, display_name, rank_points, rank_title, dinar, total_correct, best_streak, wins, updated_at
+  `;
+  const r = rows[0];
+  return {
+    roblox_user_id: Number(r.roblox_user_id),
+    username: String(r.username),
+    display_name: String(r.display_name),
+    rank_points: Number(r.rank_points ?? 0),
+    rank_title: String(r.rank_title ?? "Mubtadi'"),
+    dinar: Number(r.dinar ?? 0),
+    total_correct: Number(r.total_correct ?? 0),
+    best_streak: Number(r.best_streak ?? 0),
+    wins: Number(r.wins ?? 0),
+    updated_at: r.updated_at ? String(r.updated_at) : now,
+  };
+}
+
+export async function listLeaderboard(limit = 15): Promise<PlayerStat[]> {
+  if (!isNeonConfigured()) {
+    const store = readLocalStore();
+    return [...(store.playerStats || [])]
+      .sort((a, b) => b.rank_points - a.rank_points || b.wins - a.wins)
+      .slice(0, limit);
+  }
+
+  await ensureNeonInitialized();
+  const sql = getSql();
+  const rows = await sql`
+    SELECT roblox_user_id, username, display_name, rank_points, rank_title,
+           dinar, total_correct, best_streak, wins, updated_at
+    FROM player_stats
+    ORDER BY rank_points DESC, wins DESC, total_correct DESC
+    LIMIT ${limit}
+  `;
+  return rows.map((r) => ({
+    roblox_user_id: Number(r.roblox_user_id),
+    username: String(r.username),
+    display_name: String(r.display_name),
+    rank_points: Number(r.rank_points ?? 0),
+    rank_title: String(r.rank_title ?? "Mubtadi'"),
+    dinar: Number(r.dinar ?? 0),
+    total_correct: Number(r.total_correct ?? 0),
+    best_streak: Number(r.best_streak ?? 0),
+    wins: Number(r.wins ?? 0),
+    updated_at: r.updated_at ? String(r.updated_at) : undefined,
+  }));
 }

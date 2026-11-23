@@ -38,6 +38,19 @@ export interface GameSettings {
   updated_at?: string;
 }
 
+export interface PlayerStat {
+  roblox_user_id: number;
+  username: string;
+  display_name: string;
+  rank_points: number;
+  rank_title: string;
+  dinar: number;
+  total_correct: number;
+  best_streak: number;
+  wins: number;
+  updated_at?: string;
+}
+
 export const DIFFICULTY_PRESETS: Record<
   Exclude<DifficultyPreset, "custom">,
   {

@@ -2,6 +2,7 @@ node_modules
 .next
 out
 .env
+.ENV
 .env.local
 .env*.local
 data/local-db.json

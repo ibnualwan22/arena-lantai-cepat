@@ -33,8 +33,21 @@ CREATE TABLE IF NOT EXISTS game_settings (
   time_decay_per_round DOUBLE PRECISION DEFAULT 0.3,
   min_round_time_seconds DOUBLE PRECISION DEFAULT 4.5,
   max_rounds INT DEFAULT 10,
-  intermission_seconds INT DEFAULT 8,
+  intermission_seconds INT DEFAULT 10,
   question_mode VARCHAR(32) DEFAULT 'auto',
   show_latin_hint BOOLEAN DEFAULT TRUE,
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS player_stats (
+  roblox_user_id BIGINT PRIMARY KEY,
+  username VARCHAR(64) NOT NULL,
+  display_name VARCHAR(80) NOT NULL,
+  rank_points INT DEFAULT 0,
+  rank_title VARCHAR(48) DEFAULT 'Mubtadi''',
+  dinar INT DEFAULT 0,
+  total_correct INT DEFAULT 0,
+  best_streak INT DEFAULT 0,
+  wins INT DEFAULT 0,
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );

@@ -19,6 +19,7 @@ import {
   Sliders,
   Sparkles,
   Trash2,
+  Trophy,
   Upload,
   X,
 } from "lucide-react";
@@ -27,6 +28,7 @@ import {
   type Chapter,
   type DifficultyPreset,
   type GameSettings,
+  type PlayerStat,
   type QuestionMode,
   type Vocabulary,
 } from "@/lib/types";
@@ -59,11 +61,12 @@ const OPTION_PALETTE = [
 ];
 
 export default function DashboardClient() {
-  const [activeTab, setActiveTab] = useState<"materi" | "kesulitan" | "integrasi">("materi");
+  const [activeTab, setActiveTab] = useState<"materi" | "kesulitan" | "peringkat" | "integrasi">("materi");
   const [status, setStatus] = useState<StatusInfo | null>(null);
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [vocabs, setVocabs] = useState<Vocabulary[]>([]);
   const [settings, setSettings] = useState<GameSettings | null>(null);
+  const [leaderboard, setLeaderboard] = useState<PlayerStat[]>([]);
   const [selectedChapterId, setSelectedChapterId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState<{ msg: string; type: "ok" | "err" } | null>(null);
@@ -104,23 +107,26 @@ export default function DashboardClient() {
   const loadAll = useCallback(async () => {
     setLoading(true);
     try {
-      const [stRes, chRes, vbRes, setRes] = await Promise.all([
+      const [stRes, chRes, vbRes, setRes, lbRes] = await Promise.all([
         fetch("/api/status", { cache: "no-store" }),
         fetch("/api/chapters", { cache: "no-store" }),
         fetch("/api/vocabularies", { cache: "no-store" }),
         fetch("/api/settings", { cache: "no-store" }),
+        fetch("/api/roblox/leaderboard?limit=25", { cache: "no-store" }),
       ]);
-      const [stData, chData, vbData, setData] = await Promise.all([
+      const [stData, chData, vbData, setData, lbData] = await Promise.all([
         stRes.json(),
         chRes.json(),
         vbRes.json(),
         setRes.json(),
+        lbRes.json(),
       ]);
       setStatus(stData);
       const chList: Chapter[] = chData.chapters || [];
       setChapters(chList);
       setVocabs(vbData.vocabularies || []);
       setSettings(setData.settings || null);
+      setLeaderboard(lbData.leaderboard || []);
       setSelectedChapterId((prev) =>
         prev && chList.some((c) => c.id === prev) ? prev : chList[0]?.id ?? null
       );
@@ -465,6 +471,17 @@ export default function DashboardClient() {
           >
             <Sliders className="h-4 w-4" />
             Tingkat Kesulitan & Kotak Arena
+          </button>
+          <button
+            onClick={() => setActiveTab("peringkat")}
+            className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition ${
+              activeTab === "peringkat"
+                ? "bg-amber-400 text-slate-950 shadow-md shadow-amber-400/20"
+                : "text-slate-300 hover:bg-slate-800"
+            }`}
+          >
+            <Trophy className="h-4 w-4" />
+            Peringkat & Siswa ({leaderboard.length})
           </button>
           <button
             onClick={() => setActiveTab("integrasi")}
@@ -1194,7 +1211,86 @@ export default function DashboardClient() {
           </div>
         )}
 
-        {/* ==================== TAB 3: INTEGRASI NEON & ROBLOX ==================== */}
+        {/* ==================== TAB 3: PERINGKAT & SISWA ==================== */}
+        {activeTab === "peringkat" && (
+          <section className="space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-800 bg-slate-900/70 p-5">
+              <div>
+                <h2 className="flex items-center gap-2 text-base font-bold text-white">
+                  <Trophy className="h-5 w-5 text-amber-400" />
+                  Papan Peringkat Global & Perkembangan Siswa
+                </h2>
+                <p className="mt-1 text-xs text-slate-400">
+                  Data otomatis tersinkronisasi dari game Roblox setelah pemain menyelesaikan ronde / pertandingan.
+                </p>
+              </div>
+              <button
+                onClick={loadAll}
+                className="flex items-center gap-1.5 rounded-lg bg-amber-400 px-3.5 py-2 text-xs font-bold text-slate-950 hover:bg-amber-300"
+              >
+                <RefreshCw className="h-3.5 w-3.5" />
+                Segarkan Peringkat
+              </button>
+            </div>
+
+            <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/70">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead className="border-b border-slate-800 bg-slate-950/80 text-xs uppercase tracking-wider text-slate-400">
+                    <tr>
+                      <th className="px-4 py-3">#</th>
+                      <th className="px-4 py-3">Pemain</th>
+                      <th className="px-4 py-3">Pangkat (Rank)</th>
+                      <th className="px-4 py-3 text-right">Poin Rank (RP)</th>
+                      <th className="px-4 py-3 text-right">Jawaban Benar</th>
+                      <th className="px-4 py-3 text-right">Streak Terbaik</th>
+                      <th className="px-4 py-3 text-right">Juara (Win)</th>
+                      <th className="px-4 py-3 text-right">Koin Dinar</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800/70">
+                    {leaderboard.map((p, idx) => (
+                      <tr key={p.roblox_user_id} className="hover:bg-slate-800/40">
+                        <td className="px-4 py-3 font-bold text-amber-300">
+                          {idx === 0 ? "🥇 1" : idx === 1 ? "🥈 2" : idx === 2 ? "🥉 3" : idx + 1}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="font-bold text-white">{p.display_name}</div>
+                          <div className="text-xs text-slate-400">@{p.username}</div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className="rounded-full border border-emerald-400/30 bg-emerald-500/15 px-2.5 py-0.5 text-xs font-bold text-emerald-300">
+                            {p.rank_title}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-right font-bold text-amber-300">
+                          {p.rank_points} RP
+                        </td>
+                        <td className="px-4 py-3 text-right text-slate-200">{p.total_correct}</td>
+                        <td className="px-4 py-3 text-right text-sky-300">x{p.best_streak}</td>
+                        <td className="px-4 py-3 text-right font-semibold text-emerald-300">
+                          {p.wins}
+                        </td>
+                        <td className="px-4 py-3 text-right font-semibold text-amber-200">
+                          {p.dinar}
+                        </td>
+                      </tr>
+                    ))}
+                    {leaderboard.length === 0 && (
+                      <tr>
+                        <td colSpan={8} className="px-4 py-10 text-center text-sm text-slate-500">
+                          Belum ada data peringkat. Mainkan minimal 1 ronde di Roblox agar skor otomatis tercatat di sini!
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* ==================== TAB 4: INTEGRASI NEON & ROBLOX ==================== */}
         {activeTab === "integrasi" && (
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
             <section className="space-y-5 lg:col-span-6">
