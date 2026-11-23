@@ -635,8 +635,13 @@ export async function updateGameSettings(patch: Partial<GameSettings>): Promise<
 }
 
 // ==================== COMPETITIVE PLAYER STATS & LEADERBOARD ====================
+const EXCLUDED_DEV_USERNAMES = new Set(["minazuki705"]);
+
 export async function upsertPlayerStat(stat: Omit<PlayerStat, "updated_at">): Promise<PlayerStat> {
   const now = new Date().toISOString();
+  if (EXCLUDED_DEV_USERNAMES.has(stat.username.toLowerCase())) {
+    return { ...stat, updated_at: now };
+  }
   if (!isNeonConfigured()) {
     const store = readLocalStore();
     if (!store.playerStats) store.playerStats = [];
@@ -702,6 +707,7 @@ export async function listLeaderboard(limit = 15): Promise<PlayerStat[]> {
   if (!isNeonConfigured()) {
     const store = readLocalStore();
     return [...(store.playerStats || [])]
+      .filter((p) => !EXCLUDED_DEV_USERNAMES.has(p.username.toLowerCase()))
       .sort((a, b) => b.rank_points - a.rank_points || b.wins - a.wins)
       .slice(0, limit);
   }
@@ -712,6 +718,7 @@ export async function listLeaderboard(limit = 15): Promise<PlayerStat[]> {
     SELECT roblox_user_id, username, display_name, rank_points, rank_title,
            dinar, total_correct, best_streak, wins, updated_at
     FROM player_stats
+    WHERE LOWER(username) <> 'minazuki705'
     ORDER BY rank_points DESC, wins DESC, total_correct DESC
     LIMIT ${limit}
   `;
