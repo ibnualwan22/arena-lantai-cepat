@@ -27,16 +27,16 @@ export async function POST(req: Request) {
 
     const validItems = [];
     for (const item of rawItems) {
-      if (!item?.chapter_id || !item?.arabic?.trim() || !item?.latin?.trim() || !item?.meaning?.trim()) {
+      if (!item?.chapter_id || !item?.arabic?.trim() || !item?.meaning?.trim()) {
         return NextResponse.json(
-          { error: "Setiap mufrodat wajib memiliki bab, tulisan Arab, cara baca (latin), dan arti." },
+          { error: "Setiap mufrodat wajib memiliki bab, tulisan Arab, dan arti." },
           { status: 400 }
         );
       }
       validItems.push({
         chapter_id: Number(item.chapter_id),
         arabic: String(item.arabic),
-        latin: String(item.latin),
+        latin: item.latin ? String(item.latin) : "",
         meaning: String(item.meaning),
         tip: item.tip ? String(item.tip) : "",
         sub_group: item.sub_group ? String(item.sub_group) : "Umum",

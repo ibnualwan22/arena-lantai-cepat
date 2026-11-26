@@ -3,9 +3,12 @@ import { createChapter, listChapters } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
-    const chapters = await listChapters();
+    const { searchParams } = new URL(req.url);
+    const progParam = searchParams.get("programId");
+    const progId = progParam ? Number(progParam) : undefined;
+    const chapters = await listChapters(progId && Number.isInteger(progId) ? progId : undefined);
     return NextResponse.json({ chapters });
   } catch (err) {
     return NextResponse.json(
@@ -22,6 +25,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Nama bab wajib diisi" }, { status: 400 });
     }
     const chapter = await createChapter({
+      program_id: body.program_id ? Number(body.program_id) : undefined,
+      chapter_number: body.chapter_number !== undefined ? Number(body.chapter_number) : undefined,
       name: body.name,
       description: body.description,
       color: body.color,
